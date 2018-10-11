@@ -38,7 +38,8 @@ class CookieFactoryTest extends TestCase
     {
         $factory = $this->createFactory();
         $cookie = $factory->create('name', 'value');
-        $this->assertContains('name=value', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertEquals('value', $fields['name']);
     }
 
     // -------------------------------------------------------------------------
@@ -48,7 +49,8 @@ class CookieFactoryTest extends TestCase
     {
         $factory = $this->createFactory();
         $cookie = $factory->create('name', 'value');
-        $this->assertContains('domain=localhost', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertEquals('localhost', $fields['domain']);
     }
 
     public function testCookieDoesNotContainDomainWhenNotSet()
@@ -56,7 +58,8 @@ class CookieFactoryTest extends TestCase
         $this->domain = '';
         $factory = $this->createFactory();
         $cookie = $factory->create('name', 'value');
-        $this->assertNotContains('domain', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertArrayNotHasKey('domain', $fields);
     }
 
     // -------------------------------------------------------------------------
@@ -66,7 +69,8 @@ class CookieFactoryTest extends TestCase
     {
         $factory = $this->createFactory();
         $cookie = $factory->create('name', 'value');
-        $this->assertContains('path=/', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertEquals('/', $fields['path']);
     }
 
     public function testCookieDoesNotContainPathWhenNotSet()
@@ -74,7 +78,8 @@ class CookieFactoryTest extends TestCase
         $this->path = '';
         $factory = $this->createFactory();
         $cookie = $factory->create('name', 'value');
-        $this->assertNotContains('path', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertArrayNotHasKey('path', $fields);
     }
 
     // -------------------------------------------------------------------------
@@ -84,14 +89,16 @@ class CookieFactoryTest extends TestCase
     {
         $factory = $this->createFactory();
         $cookie = $factory->create('name', 'value', 3600);
-        $this->assertContains('max-age=3600', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertEquals('3600', $fields['max-age']);
     }
 
     public function testCookieDoesNotContainMaxAgeWhenNotProvided()
     {
         $factory = $this->createFactory();
         $cookie = $factory->create('name', 'value');
-        $this->assertNotContains('max-age', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertArrayNotHasKey('max-age', $fields);
     }
 
     // -------------------------------------------------------------------------
@@ -101,7 +108,8 @@ class CookieFactoryTest extends TestCase
     {
         $factory = $this->createFactory();
         $cookie = $factory->create('name', 'value', CookieFactory::EXPIRED);
-        $this->assertContains('expires=Thu, 01 Jan 1970 00:00:00 GMT', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertEquals(CookieFactory::EXPIRED, $fields['expires']);
     }
 
     public function testCookieContainsExpiresForDateTimeValue()
@@ -109,14 +117,16 @@ class CookieFactoryTest extends TestCase
         $factory = $this->createFactory();
         $dateTime = new DateTime('22-Dec-2015 11:43:59 EST');
         $cookie = $factory->create('name', 'value', $dateTime);
-        $this->assertContains('expires=Tuesday, 22-Dec-2015 16:43:59 UTC', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertEquals('Tuesday, 22-Dec-2015 16:43:59 UTC', $fields['expires']);
     }
 
     public function testCookieDoesNotContainExpiresNotProvided()
     {
         $factory = $this->createFactory();
         $cookie = $factory->create('name', 'value');
-        $this->assertNotContains('expires', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertArrayNotHasKey('expires', $fields);
     }
 
     // -------------------------------------------------------------------------
@@ -127,7 +137,8 @@ class CookieFactoryTest extends TestCase
         $this->secure = true;
         $factory = $this->createFactory();
         $cookie = $factory->create('name', 'value');
-        $this->assertContains('secure', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertArrayHasKey('secure', $fields);
     }
 
     public function testCookieDoesNotContainSecureWhenFalse()
@@ -135,7 +146,8 @@ class CookieFactoryTest extends TestCase
         $this->secure = false;
         $factory = $this->createFactory();
         $cookie = $factory->create('name', 'value');
-        $this->assertNotContains('secure', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertArrayNotHasKey('secure', $fields);
     }
 
     // -------------------------------------------------------------------------
@@ -146,7 +158,8 @@ class CookieFactoryTest extends TestCase
         $this->httpOnly = true;
         $factory = $this->createFactory();
         $cookie = $factory->create('name', 'value');
-        $this->assertContains('httpOnly', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertArrayHasKey('httpOnly', $fields);
     }
 
     public function testCookieDoesNotContainHttpOnlyWhenFalse()
@@ -154,6 +167,40 @@ class CookieFactoryTest extends TestCase
         $this->httpOnly = false;
         $factory = $this->createFactory();
         $cookie = $factory->create('name', 'value');
-        $this->assertNotContains('httpOnly', $cookie);
+        $fields = $this->parseFields($cookie);
+        $this->assertArrayNotHasKey('httpOnly', $fields);
+    }
+
+    // -------------------------------------------------------------------------
+    // Removing Cookies
+
+    public function testRemoveCreatesCookieWithNameAndEmptyValue()
+    {
+        $factory = $this->createFactory();
+        $cookie = $factory->remove('name');
+        $fields = $this->parseFields($cookie);
+        $this->assertEquals('', $fields['name']);
+    }
+
+    public function testRemoveCreatesCookieWithExpirationInPast()
+    {
+        $factory = $this->createFactory();
+        $cookie = $factory->remove('name');
+        $fields = $this->parseFields($cookie);
+
+        $this->assertArrayHasKey('expires', $fields);
+
+        $expires = $fields['expires'];
+        $now = time();
+        $this->assertLessThan($now, $expires);
+    }
+
+    // -------------------------------------------------------------------------
+
+    private function parseFields(string $cookie): array
+    {
+        $cookie = str_replace('; ', '&', $cookie);
+        parse_str($cookie, $fields);
+        return $fields;
     }
 }
